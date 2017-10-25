@@ -47,10 +47,12 @@ module _ {ℓ} {A : Set ℓ} {x : A} where
   isContr-Singleton-lem : {y : A} (p : x == y) → (x , refl) == (y , p)
   isContr-Singleton-lem p i = p i , λ j → p (i ∧ j)
 
+-- TAKEN FROM SAIZAN
 transp : {ℓ : I → Level} (P : (i : I) → Set (ℓ i)) → P i0 → P i1
 transp P ai0 = primComp P i0 (λ x → isOneEmpty) ai0
 
 module _ {ℓ} {A : Set ℓ} {x : A} where
+  -- TAKEN FROM SAIZAN
   J : ∀ {ℓ'} (P : (y : A) → x == y → Set ℓ') → P x refl → {y : A} (p : x == y) → P y p
   J P r p = transp (λ i → uncurry P $ isContr-Singleton-lem p i) r
 
@@ -103,13 +105,12 @@ A ≃ B = Σ (A → B) (isEquiv A B)
 ide : ∀ {ℓ} {A : Set ℓ} → A ≃ A
 ide = id , λ y → (y , refl) , isContr-Singleton-lem ∘ proj₂
 
-glue = primGlue
-
+-- TAKEN FROM SAIZAN
 Glue : ∀ {ℓ₁ ℓ₂} (A : Set ℓ₁) → (φ : I) → (T : Partial (Set ℓ₂) φ)
   (f : (PartialP φ (λ o → T o ≃ A))) → Set ℓ₂
-Glue A φ T f = glue A φ T (λ o → proj₁ $ f o) (λ o → proj₂ $ f o)
+Glue A φ T f = primGlue A φ T (λ o → proj₁ $ f o) (λ o → proj₂ $ f o)
 
--- For some reason, the deMorgan algebra laws do not hold judgmentally...
+-- TAKEN FROM SAIZAN
 ua : ∀ {ℓ} {A B : Set ℓ} → A ≃ B → A == B
 ua {A = A} {B} f i = Glue B (~ i ∨ i)
   (λ {(i = i0) → A ; (i = i1) → B})
@@ -140,4 +141,4 @@ not-ua : Bool → Bool
 not-ua = coe {lzero} {lzero} notP
 
 id-ua : Bool → Bool
-id-ua = coe {lzero} {lzero} $ ua $ id , {!!}
+id-ua = coe {lzero} {lzero} $ ua ide
