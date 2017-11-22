@@ -74,12 +74,20 @@ Together, these properties make $(I, \max, \min, 0, 1)$ a bounded distributive l
 {-# OPTIONS --cubical --rewriting #-}
 
 module _ where
+
 open import Agda.Primitive.Cubical public renaming
   (primINeg   to  ~_;
    primIMax   to _∨_;
    primIMin   to _∧_;
    primComp   to comp;
    isOneEmpty to [])
+
+{-module Unsafe' (dummy : Set₁) where
+  open import Agda.Primitive.Cubical public
+unsafeComp = Unsafe'.primComp Set
+unsafePOr = Unsafe'.primPOr Set-}
+
+open import Agda.Primitive using (Level)
 
 \end{code}}
 
@@ -92,14 +100,16 @@ Note that CuTT defines \D{I} as a set, as opposed to a type, for technical reaso
 \AgdaHide{
 \begin{code}
 postulate
-  Path  : ∀ {ℓ} {A : Set ℓ} → A → A → Set ℓ
   PathP : ∀ {ℓ} (P : I → Set ℓ) → P i0 → P i1 → Set ℓ
 
-{-# BUILTIN PATH  Path #-}
+
+  
+
 {-# BUILTIN PATHP PathP #-}
 
-{-Path : ∀ {ℓ} {A : Set ℓ} → A → A → Set ℓ
-Path {A = A} = PathP (λ _ → A)-}
+Path : ∀ {ℓ} {A : Set ℓ} → A → A → Set ℓ
+Path {A = A} = PathP (λ _ → A)
+
 \end{code}}
 
 Perhaps that after dealing with this level of abstraction (pun intended), we deserve a few examples where we reason about the basic properties of paths.
@@ -126,6 +136,7 @@ We want a path abstraction that is invariant on an element in \D{I}, so
 \AgdaHide{
 \begin{code}
 module _ {ℓ} {A : Set ℓ} {x y : A} where
+  infix 120 _⁻¹
 \end{code}}
 \begin{code}
   _⁻¹ : Path x y → Path y x
@@ -202,44 +213,34 @@ module _ {ℓ} {A : Set ℓ} {x y z : A} where
 \end{theorem}
 \begin{proof}
 \begin{code}
-  p ∙ q = λ i → comp (λ _ → A) _ (λ { j (i = i0) → x;
-                                      j (i = i1) → q j}) (p i)
+  p ∙ q = λ i → comp (λ _ → A) _ (λ { j (i = i0) → x; j (i = i1) → q j}) (p i)
 \end{code}
 \end{proof}
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[->]
-  \node at (0,0) (x1) {\Arg{x}};
-  \node at (0,3) (x2) {\Arg{x}};
-  \node at (3,0) (y)  {\Arg{y}};
-  \node at (3,3) (z)  {\Arg{z}};
+\subsection{Modeling Equality}
 
-  \path
-    (x1) edge         node[left]  {x}         (x2)
-    (x2) edge[dashed] node[above] {?}         (z)
-    (x1) edge         node[below] {\Arg{p~i}} (y)
-    (y)  edge         node[right] {\Arg{q~j}} (z);
-\end{tikzpicture}
-\caption{Coercion}
-\label{fig:coe}
-\end{figure}
+Equality is substitutive. Theorems: it is an equivalence relation.
 
 \begin{code}
 module _ {ℓ} {A B : Set ℓ} where
   coe : Path A B → A → B
   coe p x = comp (λ i → p i) _ (λ _ → []) x
 
+  {-open import Agda.Primitive using (Level)
+  coed : {ℓ : I → Agda.Primitive.Level} → (A : (i : I) → Set (ℓ i)) → A i0 → A i1
+  coed A x = comp A i0 (λ _ → []) x-}
+
 open import Function using (_∘_)
 
 module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} where
   transport : (P : A → Set ℓ₂) {x y : A} → Path x y → P x → P y
   transport P = coe ∘ ap P
+
+  transport⁻¹ : (P : A → Set ℓ₂) {x y : A} → Path x y → P y → P x
+  transport⁻¹ P = transport P ∘ _⁻¹
+
+_≡_ = Path
 \end{code}
-
-\subsection{Modeling Equality}
-
-Equality is generally reflexive and substitutive. Theorems: it is an equivalence relation.
 
 \begin{code}
 open import Relation.Binary using (IsEquivalence; Setoid)
@@ -270,80 +271,71 @@ isContr : ∀ {ℓ} → Set ℓ → Set ℓ
 isContr A = ∃ λ x → ∀ (y : A) → Path x y
 
 singl : ∀ {ℓ} {A : Set ℓ} → A → Set ℓ
-singl a = ∃ λ x → Path a x
+singl a = ∃ λ x → a ≡ x
 
-module _ {ℓ} {A : Set ℓ} {x y : A} where
+module _ {ℓ} {A : Set ℓ} {x : A} where
   singlIsContr : isContr (singl x)
   singlIsContr = (x , idp) , λ { (_ , p) i → p i , λ j → p (i ∧ j) }
 
+{-module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} where
+  transport-β : (P : A → Set ℓ₂) {x : A} (Px : P x) → Path (transport P idp Px) Px
+  transport-β P {x} Px j = {!!} --comp (λ _ → P x) _ (λ { i (j = i0) → Px }) Px-}
+
 module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {x : A} where
   J : (P : ∀ y → Path x y → Set ℓ₂) (r : P x idp) {y : A} (p : Path x y) → P y p
-  J P r {y} p = coe (λ i → uncurry P (proj₂ (singlIsContr {y = y}) (y , p) i)) r
+  J P r {y} p = coe (λ i → uncurry P (proj₂ singlIsContr (y , p) i)) r
 
-postulate
-  Id : ∀ {ℓ} {A : Set ℓ} → A → A → Set ℓ
-
-{-# BUILTIN ID    Id   #-}
-
-infixr 30 _≡_
-_≡_ = Id
-
-{-# BUILTIN CONID conid #-}
-
-module _ {ℓ} {A : Set ℓ} {x : A} where
-  refl : x ≡ x
-  refl = conid i1 λ _ → x
-
--- CHANGED PATH' to PATH
-primitive
-  primPathApply  : ∀ {ℓ} {A :     Set ℓ} {x y} → Path   x y →      I →  A
-  primPathPApply : ∀ {ℓ} {A : I → Set ℓ} {x y} → PathP A x y → (i : I) → A i
-  primDepIMin : _
-  primIdFace : ∀ {ℓ} {A : Set ℓ} {x y : A} → Id x y → I
-
-module PrimId where
-  primitive
-    primIdPath : ∀ {ℓ} {A : Set ℓ} {x y : A} → Id x y → Path x y
-    primIdJ : ∀ {ℓ₁ ℓ₂} {A : Set ℓ₁} {x : A}
-              (P : ∀ y → Id x y → Set ℓ₂) →
-              P x refl → ∀ {y} (p : x ≡ y) → P y p
-
-open PrimId renaming (primIdJ to IdJ; primIdPath to idToPath) public
-
-module _ {ℓ} {A : Set ℓ} {x y : A} where
-  ! : x ≡ y → y ≡ x
-  ! p = IdJ (λ y _ → y ≡ x) refl p
-
-module _ {ℓ} {A : Set ℓ} {x y z : A} where
-  infixr 80 _◾_
-  _◾_ : x ≡ y → y ≡ z → x ≡ z
-  _◾_ p = IdJ (λ y _ → x ≡ y) p
-
-
-
-module _ {ℓ} {A : Set ℓ} {x y : A} where
-  ◾-unitr : (p : x ≡ y) → p ◾ refl ≡ p
-  ◾-unitr _ = refl
-
-  ∙-unitr : (p : Path x y) → Path (p ∙ idp) p
-  ∙-unitr p = idp
-
-module _ {ℓ} {A : Set ℓ} {x y z w : A} where
-  ∙-assoc : (p : x ≡ y) (q : y ≡ z) (r : z ≡ w) → p ◾ (q ◾ r) ≡ (p ◾ q) ◾ r
-  ∙-assoc =
-    IdJ (λ _ p → ∀ q r → p ◾ (q ◾ r) ≡ (p ◾ q) ◾ r)
-      (IdJ (λ _ q → ∀ r → refl ◾ (q ◾ r) ≡ (refl ◾ q) ◾ r)
-        (IdJ (λ _ r → refl ◾ (refl ◾ r) ≡ (refl ◾ refl) ◾ r) refl))
-
+{-module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {x : A} where
+  J-β : (P : ∀ y → Path x y → Set ℓ₂) (r : P x idp) → Path (J P r idp) r
+  J-β P r = {!!}-}
 \end{code}
 
-
 \begin{code}
+module _ {ℓ} {A : Set ℓ} {x y : A} where
+  ∙-unitl : (p : Path x y) → idp ∙ p ≡ p
+  ∙-unitl = J (λ _ p → idp ∙ p ≡ p)
+    λ k j → comp (λ _ → A) _ (λ _ → λ
+      { (j = i0) → x;
+        (j = i1) → x;
+        (k = i1) → x }) x
+  
+  ∙-unitr : (p : Path x y) → p ∙ idp ≡ p
+  ∙-unitr = J (λ _ p → p ∙ idp ≡ p)
+    λ k j → comp (λ _ → A) _ (λ _ → λ
+      { (j = i0) → x;
+        (j = i1) → x;
+        (k = i1) → x }) x
+
+  ∙-invl : (p : Path x y) → p ⁻¹ ∙ p ≡ idp
+  ∙-invl = J (λ _ p → p ⁻¹ ∙ p ≡ idp)
+    λ k j → comp (λ _ → A) _ (λ _ → λ
+      { (j = i0) → x;
+        (j = i1) → x;
+        (k = i1) → x }) x
+
+  ∙-invr : (p : Path x y) → p ∙ p ⁻¹ ≡ idp
+  ∙-invr = J (λ _ p → p ∙ p ⁻¹ ≡ idp)
+    λ k j → comp (λ _ → A) _ (λ _ → λ
+      { (j = i0) → x;
+        (j = i1) → x;
+        (k = i1) → x }) x
+
+module _ {ℓ} {A : Set ℓ} {x y z w : A} where 
+  ∙-assoc : (p : Path x y) (q : Path y z) (r : Path z w) → Path (p ∙ q ∙ r) ((p ∙ q) ∙ r)
+  ∙-assoc = J (λ _ p → ∀ q r → Path (p ∙ q ∙ r) ((p ∙ q) ∙ r))
+    (J (λ _ q → ∀ r → Path (idp ∙ q ∙ r) ((idp ∙ q) ∙ r))
+      (J (λ _ r → Path (idp ∙ idp ∙ r) ((idp ∙ idp) ∙ r))
+        {-λ k j → comp (λ _ → A) _
+          (λ { i (j = i0) → x; i (j = i1) →  x; i (k = i1) → x }) x-} {!!}))
+
 open import Algebra using (Group)
 
-π1 : ∀ {ℓ} → (A : Set ℓ) → A → Group ℓ ℓ
-π1 A a = record
-  { Carrier = Path a a
+Ω[_,_] : ∀ {ℓ} (A : Set ℓ) → A → Set ℓ 
+Ω[ _ , a ] = Path a a
+
+{-Ω-Group : ∀ {ℓ} (A : Set ℓ) → A → Group ℓ ℓ
+Ω-Group A x = record
+  { Carrier = Ω A x
   ; _≈_ = _≡_
   ; _∙_ = _∙_
   ; ε = idp
@@ -351,17 +343,163 @@ open import Algebra using (Group)
   ; isGroup = record
     { isMonoid = record
       { isSemigroup = record
-        { isEquivalence = {!!} --PathIsEquivalence
+        { isEquivalence = PathIsEquivalence
         ; assoc = {!!}
-        ; ∙-cong = {!!}
-        }
-      ; identity = (λ x → {!!}) , {!!}
-      }
-    ; inverse = {!!}
-    ; ⁻¹-cong = {!!}
+        ; ∙-cong = {!!} }
+      ; identity = ∙-unitl , ∙-unitr }
+    ; inverse = ∙-invl , ∙-invr
+    ; ⁻¹-cong = λ x → {!!}
     }
-  }
+  }-}
 
+fiber : ∀ {ℓ₁ ℓ₂} {A : Set ℓ₁} {B : Set ℓ₂} (f : A → B) (y : B) → Set _
+fiber {A = A} f y = Σ[ x ∈ A ] y ≡ f x
+
+
+
+module _ {ℓ₁} {ℓ₂} (A : Set ℓ₁) (B : Set ℓ₂) where
+  isEquiv : (A → B) → Set _
+  isEquiv f = (y : B) → isContr (fiber f y)
+
+{-# BUILTIN ISEQUIV isEquiv #-}
+
+infix 4 _≃_
+_≃_ : ∀ {ℓ₁} {ℓ₂} → Set ℓ₁ → Set ℓ₂ → Set _
+A ≃ B = Σ (A → B) (isEquiv _ _)
+
+open import Function using (id)
+
+ide : ∀ {ℓ} {A : Set ℓ} → A ≃ A
+ide = id , λ y → singlIsContr {x = y}
+
+module _ {ℓ} {A B : Set ℓ} where
+  pathToEquiv : A ≡ B → A ≃ B
+  pathToEquiv = J (λ B _ → A ≃ B) ide
+
+{-pathToEquivProof : ∀ {ℓ} (E : I → Set ℓ) → isEquiv (E i0) (E i1) (coed E)
+pathToEquivProof E = proj₂ (pathToEquiv P)
+  where P : E i0 ≡ E i1
+        P i = E i
+
+{-# BUILTIN PATHTOEQUIV pathToEquivProof #-}-}
+
+module GluePrims where
+  primitive
+    primGlue    : ∀ {ℓ ℓ'} (A : Set ℓ) (φ : I)
+      → (T : Partial (Set ℓ') φ) → (f : PartialP φ (λ o → T o → A))
+      → (pf : PartialP φ (λ o → isEquiv (T o) A (f o))) → Set ℓ'
+    prim^glue   : ∀ {ℓ ℓ'} {A : Set ℓ} {φ : I}
+      → {T : Partial (Set ℓ') φ} → {f : PartialP φ (λ o → T o → A)}
+      → {pf : PartialP φ (λ o → isEquiv (T o) A (f o))}
+      → PartialP φ T → A → primGlue A φ T f pf
+    prim^unglue : ∀ {ℓ ℓ'} {A : Set ℓ} {φ : I}
+      → {T : Partial (Set ℓ') φ} → {f : PartialP φ (λ o → T o → A)}
+      → {pf : PartialP φ (λ o → isEquiv (T o) A (f o))}
+      → primGlue A φ T f pf → A
+
+open GluePrims public renaming (prim^glue to glue ; prim^unglue to unglue)
+
+Glue : ∀ {ℓ ℓ'} (A : Set ℓ) → (φ : I) → (T : Partial (Set ℓ') φ)
+  (f : (PartialP φ (λ o → T o ≃ A))) → Set ℓ'
+Glue A φ T f = primGlue A φ T (λ o → proj₁ (f o)) (λ o → proj₂ (f o))
+
+{-module Unsafe'' (dummy : Set1) = GluePrims
+module Unsafe''' = Unsafe'' Set -- using () renaming (prim^glue to unsafeGlue) public
+
+unsafeGlue = Unsafe'''.prim^glue
+
+primitive
+  primFaceForall : (I → I) → I
+
+module FaceForall (φ : I → I) where
+  δ = primFaceForall φ
+  postulate
+    ∀v : ∀ i → IsOne (φ i) → IsOne ((δ ∨ (φ i0 ∧ ~ i)) ∨ (φ i1 ∧ i))
+    ∀e : IsOne δ → ∀ i → IsOne (φ i)
+
+module _ {ℓ ℓ'} {A : Set ℓ} {φ : I} {T : Partial (Set ℓ') φ}
+           {f : (PartialP φ λ o → T o ≃ A)} where
+  fwdGlueIso : PartialP φ (λ o → Glue A φ T f → T o)
+  fwdGlueIso (φ = i1) = id _
+
+  backGlueIso : PartialP φ (λ o → T o → Glue A φ T f)
+  backGlueIso (φ = i1) = id _
+
+  lemGlueIso : (b : PartialP φ (λ _ → Glue A φ T f)) → PartialP φ λ o →
+                 (unglue {φ = φ} (b o)) ≡ (proj₁ (f o) (fwdGlueIso o (b o)))
+  lemGlueIso _ (φ = i1) = idp
+
+module CompGlue {ℓ ℓ' : I → Level} (A : ∀ i → Set (ℓ i))
+                (φ : I → I) (T : ∀ i → Partial (Set (ℓ' i)) (φ i))
+                (f : ∀ i → PartialP (φ i) λ o → T i o ≃ A i)
+                where
+  B : ∀ i → Set (ℓ' i)
+  B = λ i → Glue (A i) (φ i) (T i) (f i)
+
+  module Local (ψ : I) (b : ∀ i → Partial (B i) ψ)
+               (b0 : B i0 {- [ ψ ↦ b i0 ] -}) where
+    a : ∀ i → Partial (A i) ψ
+    a i = λ o → unglue {φ = φ i} (b i o)
+
+    module Forall (δ : I) (∀e : IsOne δ → ∀ i → IsOne (φ i)) where
+      a0 : A i0
+      a0 = unglue {φ = φ i0} b0
+
+      a1' = unsafeComp A ψ a a0
+
+      t1' : PartialP δ (λ o → T i1 (∀e o i1))
+      t1' o = unsafeComp (λ i → T i (∀e o i)) ψ
+                (λ i o' → fwdGlueIso {φ = φ i} (∀e o i) (b i o'))
+                (fwdGlueIso {φ = φ i0} (∀e o i0) b0)
+
+      ω : PartialP δ _
+      ω o = pres (λ i → fst (f i (∀e o i))) ψ
+              (λ i x → fwdGlueIso {φ = φ i} (∀e o i) (b i x))
+              (fwdGlueIso {φ = φ i0} (∀e o i0) b0)
+
+      a1'' = unsafeComp (λ _ → A i1) (δ ∨ ψ)
+              (λ j → unsafePOr δ ψ (λ o → ω o j) (a i1)) a1'
+
+      g : PartialP (φ i1) _
+      g o = (equiv (T i1 _) (A i1) (f i1 o) (δ ∨ ψ)
+        (unsafePOr δ ψ t1' (λ o' → fwdGlueIso {φ = φ i1} o (b i1 o'))) a1''
+        ((unsafePOr δ ψ (λ {(δ = i1) → refl})
+          ((λ{ (ψ = i1) → lemGlueIso {φ = φ i1} (λ _ → b i1 itIsOne) o })))))
+      t1 α : PartialP (φ i1) _
+      t1 o = fst (g o)
+      α o = snd (g o)
+
+      a1 = unsafeComp (λ j → A i1) (φ i1 ∨ ψ)
+             (λ j → unsafePOr (φ i1) ψ (λ o → α o j) (a i1)) a1''
+
+      b1 : Glue _ (φ i1) (T i1) (f i1)
+      b1 = unsafeGlue {φ = φ i1} t1 a1
+    b1 = Forall.b1 (FaceForall.δ φ) (FaceForall.∀e φ)
+
+compGlue : {ℓ ℓ' : I → Level} (A : ∀ i → Set (ℓ i)) (φ : I → I)
+           (T : ∀ i → Partial (Set (ℓ' i)) (φ i))
+           (f : ∀ i → PartialP (φ i) λ o → (T i o) → (A i)) →
+           (pf : ∀ i → PartialP (φ i) (λ o → isEquiv (T i o) (A i) (f i o))) →
+           let B : ∀ i → Set (ℓ' i)
+               B = λ i → primGlue (A i) (φ i) (T i) (f i) (pf i)
+           in  (ψ : I) (b : ∀ i → Partial (B i) ψ) (b0 : B i0) → B i1
+compGlue A φ T f pf ψ b b0 =
+  CompGlue.Local.b1 A φ T (λ i p → (f i p) , (pf i p)) ψ b b0
+
+{-# BUILTIN COMPGLUE compGlue #-}
+-}
+
+module _ {ℓ} {A B : Set ℓ} where
+  ua : A ≃ B → A ≡ B
+  ua e i = Glue B _ (λ { (i = i0) → A; (i = i1) → B})
+    λ { (i = i0) → e; (i = i1) → ide }
+
+-- Axiom: pathToEquiv is an equivalence with ua as its inverse
+-- TODO: ua-β
+
+\end{code}
+
+\begin{code}
 module RewriteRelation where
 
 module _ {ℓ} {X : Set ℓ} where
@@ -375,7 +513,7 @@ postulate
   base : S¹
   loop : Path base base
 
-module RecS¹ {ℓ} (Y : Set ℓ)
+module RecS¹ {ℓ} {Y : Set ℓ}
              (base* : Y)
              (loop* : Path base* base*) where
   postulate
@@ -389,8 +527,31 @@ module RecS¹ {ℓ} (Y : Set ℓ)
 recS¹ = RecS¹.f
 
 
-open import Agda.Builtin.Int
+open import Data.Integer
+open import Data.Nat
 
+-- Wind a path n times
+loop^ : ℤ → Ω[ S¹ , base ]
+loop^ (+ 0)        = idp
+loop^ (+ suc n)    = loop ∙ loop^ (+ n)
+loop^ -[1+ 0 ]     = loop ⁻¹
+loop^ -[1+ suc n ] = loop ⁻¹ ∙ loop^ -[1+ n ]
+
+-- Universal cover of circle
+{-Cover : S¹ → Set
+Cover = recS¹ ℤ {!!}
+
+windFrom : ℤ → Ω[S¹] → ℤ
+windFrom n p = transport Cover p n
+
+encode : ∀ {a} → Path base a → Cover a
+encode = J (λ a _ → Cover a) (+ 0)
+
+-- Winding number of path
+windingNum : Ω[S¹] → ℤ
+windingNum p = transport Cover p (+ 0)-}
+
+--suc≃ : ℤ ≃ ℤ
 
 
 \end{code}
