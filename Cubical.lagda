@@ -89,6 +89,8 @@ unsafePOr = Unsafe'.primPOr Set-}
 
 open import Agda.Primitive using (Level)
 
+open import Function using (id)
+
 \end{code}}
 
 Now, fix a countable set of names $N$. We obtain a \emph{homotopical} (that is, considering only the boundary elements) notion of $I$ via the \emph{set} \D{I} defined by the following grammar and quotiented by the aforementioned properties. Note that the inclusion of only $\Con{i0}$ and $\Con{i1}$ does not allow us to prove $(\F{\sim}~\Arg{r})~\F{\land}~\Arg{r}=\Con{i0}$ or $(1-\Arg{r})\lor\Arg{r}=\Con{i1}$---\D{I} is faithful to the original definition of $I$.
@@ -201,30 +203,23 @@ We would like to compute the composition of these paths by ``completing'' the sq
 \item The bottom face of said cube (of type \Arg{P}~\Con{i0})
 \end{enumerate}
 
-\begin{theorem}[Composition of paths]
-\AgdaHide{
-\begin{code}
-module _ {ℓ} {A : Set ℓ} {x y z : A} where
-  infixr 80 _∙_
-\end{code}}
-\begin{code}
-  _∙_ : Path x y → Path y z → Path x z
-\end{code}
-\end{theorem}
-\begin{proof}
-\begin{code}
-  p ∙ q = λ i → comp (λ _ → A) _ (λ { j (i = i0) → x; j (i = i1) → q j}) (p i)
-\end{code}
-\end{proof}
-
 \subsection{Modeling Equality}
 
 Equality is substitutive. Theorems: it is an equivalence relation.
 
 \begin{code}
+{-fill : {ℓ : I → Level} → (A : (i : I) → Set (ℓ i)) → (φ : I) →
+  ((i : I) → Partial (A i) φ) → A i0 → (i : I) → A i
+fill A φ u a0 i = comp (λ j → A (i ∧ j)) (φ ∨ ~ i)
+  (λ j → primPOr φ (~ i) (u (i ∧ j)) λ { (i = i0) → a0 }) a0-}
+
 module _ {ℓ} {A B : Set ℓ} where
   coe : Path A B → A → B
   coe p x = comp (λ i → p i) _ (λ _ → []) x
+
+module _ {ℓ} {A : Set ℓ} where
+  coe-β : (x : A) → Path (coe idp x) x
+  coe-β x = {!!}
 
   {-open import Agda.Primitive using (Level)
   coed : {ℓ : I → Agda.Primitive.Level} → (A : (i : I) → Set (ℓ i)) → A i0 → A i1
@@ -238,9 +233,47 @@ module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} where
 
   transport⁻¹ : (P : A → Set ℓ₂) {x y : A} → Path x y → P y → P x
   transport⁻¹ P = transport P ∘ _⁻¹
-
-_≡_ = Path
 \end{code}
+
+We can model equality in this type theory via topological paths---continuous functions from the unit interval into a space.
+
+\begin{code}
+open import Data.Product
+
+isContr : ∀ {ℓ} → Set ℓ → Set ℓ
+isContr A = ∃ λ x → ∀ (y : A) → Path x y
+
+singl : ∀ {ℓ} {A : Set ℓ} → A → Set ℓ
+singl a = ∃ λ x → Path a x
+
+module _ {ℓ} {A : Set ℓ} {x : A} where
+  singlIsContr : isContr (singl x)
+  singlIsContr = (x , idp) , λ { (_ , p) i → p i , λ j → p (i ∧ j) }
+
+module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {x : A} where
+  J : (P : ∀ y → Path x y → Set ℓ₂) (r : P x idp) {y : A} (p : Path x y) → P y p
+  J P r {y} p = coe (λ i → uncurry P (proj₂ singlIsContr (y , p) i)) r
+
+module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {x : A} where
+  J-β : (P : ∀ y → Path x y → Set ℓ₂) (r : P x idp) → Path (J P r idp) r
+  J-β _ = coe-β
+\end{code}
+
+\begin{theorem}[Composition of paths]
+\AgdaHide{
+\begin{code}
+module _ {ℓ} {A : Set ℓ} {x y z : A} where
+  infixr 80 _∙_
+\end{code}}
+\begin{code}
+  _∙_ : Path x y → Path y z → Path x z
+\end{code}
+\end{theorem}
+\begin{proof}
+\begin{code}
+  _∙_ = J (λ y _ → Path y z → Path x z) id
+\end{code}
+\end{proof}
 
 \begin{code}
 open import Relation.Binary using (IsEquivalence; Setoid)
@@ -260,73 +293,43 @@ PathSetoid A = record
 
 module _ {ℓ} {A : Set ℓ} where
   open import Relation.Binary.EqReasoning (PathSetoid A) public
+
+_≡_ = Path
 \end{code}
 
-We can model equality in this type theory via topological paths---continuous functions from the unit interval into a space.
-
 \begin{code}
-open import Data.Product
 
-isContr : ∀ {ℓ} → Set ℓ → Set ℓ
-isContr A = ∃ λ x → ∀ (y : A) → Path x y
+module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {P : A → Set ℓ₂} where
+  _∼_ : (f g : (x : A) → P x) → Set _
+  f ∼ g = (x : A) → f x ≡ g x
 
-singl : ∀ {ℓ} {A : Set ℓ} → A → Set ℓ
-singl a = ∃ λ x → a ≡ x
+  module _ {f g : (x : A) → P x} where
+    app≡ : f ≡ g → f ∼ g
+    app≡ p x i = p i x
 
-module _ {ℓ} {A : Set ℓ} {x : A} where
-  singlIsContr : isContr (singl x)
-  singlIsContr = (x , idp) , λ { (_ , p) i → p i , λ j → p (i ∧ j) }
-
-{-module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} where
-  transport-β : (P : A → Set ℓ₂) {x : A} (Px : P x) → Path (transport P idp Px) Px
-  transport-β P {x} Px j = {!!} --comp (λ _ → P x) _ (λ { i (j = i0) → Px }) Px-}
-
-module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {x : A} where
-  J : (P : ∀ y → Path x y → Set ℓ₂) (r : P x idp) {y : A} (p : Path x y) → P y p
-  J P r {y} p = coe (λ i → uncurry P (proj₂ singlIsContr (y , p) i)) r
-
-{-module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {x : A} where
-  J-β : (P : ∀ y → Path x y → Set ℓ₂) (r : P x idp) → Path (J P r idp) r
-  J-β P r = {!!}-}
+    λ≡ : f ∼ g → f ≡ g
+    λ≡ h i x = h x i
 \end{code}
 
 \begin{code}
 module _ {ℓ} {A : Set ℓ} {x y : A} where
   ∙-unitl : (p : Path x y) → idp ∙ p ≡ p
-  ∙-unitl = J (λ _ p → idp ∙ p ≡ p)
-    λ k j → comp (λ _ → A) _ (λ _ → λ
-      { (j = i0) → x;
-        (j = i1) → x;
-        (k = i1) → x }) x
-  
+  ∙-unitl = app≡ (J-β (λ y _ → Path x y → Path x y) _)
+
+module _ {ℓ} {A : Set ℓ} {x y : A} where
   ∙-unitr : (p : Path x y) → p ∙ idp ≡ p
-  ∙-unitr = J (λ _ p → p ∙ idp ≡ p)
-    λ k j → comp (λ _ → A) _ (λ _ → λ
-      { (j = i0) → x;
-        (j = i1) → x;
-        (k = i1) → x }) x
+  ∙-unitr = J (λ _ p → p ∙ idp ≡ p) (∙-unitl idp)
 
   ∙-invl : (p : Path x y) → p ⁻¹ ∙ p ≡ idp
-  ∙-invl = J (λ _ p → p ⁻¹ ∙ p ≡ idp)
-    λ k j → comp (λ _ → A) _ (λ _ → λ
-      { (j = i0) → x;
-        (j = i1) → x;
-        (k = i1) → x }) x
+  ∙-invl = J (λ _ p → p ⁻¹ ∙ p ≡ idp) (∙-unitl idp)
 
   ∙-invr : (p : Path x y) → p ∙ p ⁻¹ ≡ idp
-  ∙-invr = J (λ _ p → p ∙ p ⁻¹ ≡ idp)
-    λ k j → comp (λ _ → A) _ (λ _ → λ
-      { (j = i0) → x;
-        (j = i1) → x;
-        (k = i1) → x }) x
+  ∙-invr = J (λ _ p → p ∙ p ⁻¹ ≡ idp) (∙-unitl idp)
 
 module _ {ℓ} {A : Set ℓ} {x y z w : A} where 
-  ∙-assoc : (p : Path x y) (q : Path y z) (r : Path z w) → Path (p ∙ q ∙ r) ((p ∙ q) ∙ r)
-  ∙-assoc = J (λ _ p → ∀ q r → Path (p ∙ q ∙ r) ((p ∙ q) ∙ r))
-    (J (λ _ q → ∀ r → Path (idp ∙ q ∙ r) ((idp ∙ q) ∙ r))
-      (J (λ _ r → Path (idp ∙ idp ∙ r) ((idp ∙ idp) ∙ r))
-        {-λ k j → comp (λ _ → A) _
-          (λ { i (j = i0) → x; i (j = i1) →  x; i (k = i1) → x }) x-} {!!}))
+  ∙-assoc : (p : Path x y) (q : Path y z) (r : Path z w) → (p ∙ q) ∙ r ≡ p ∙ q ∙ r
+  ∙-assoc = J (λ _ p → ∀ q r → (p ∙ q) ∙ r ≡ p ∙ q ∙ r)
+    λ q r → ap (λ x → x ∙ r) (∙-unitl q) ∙ ∙-unitl (q ∙ r) ⁻¹
 
 open import Algebra using (Group)
 
@@ -335,7 +338,7 @@ open import Algebra using (Group)
 
 {-Ω-Group : ∀ {ℓ} (A : Set ℓ) → A → Group ℓ ℓ
 Ω-Group A x = record
-  { Carrier = Ω A x
+  { Carrier = Ω[ A , x ]
   ; _≈_ = _≡_
   ; _∙_ = _∙_
   ; ε = idp
@@ -344,18 +347,16 @@ open import Algebra using (Group)
     { isMonoid = record
       { isSemigroup = record
         { isEquivalence = PathIsEquivalence
-        ; assoc = {!!}
+        ; assoc = ∙-assoc
         ; ∙-cong = {!!} }
       ; identity = ∙-unitl , ∙-unitr }
     ; inverse = ∙-invl , ∙-invr
-    ; ⁻¹-cong = λ x → {!!}
+    ; ⁻¹-cong = {!!}
     }
   }-}
 
 fiber : ∀ {ℓ₁ ℓ₂} {A : Set ℓ₁} {B : Set ℓ₂} (f : A → B) (y : B) → Set _
 fiber {A = A} f y = Σ[ x ∈ A ] y ≡ f x
-
-
 
 module _ {ℓ₁} {ℓ₂} (A : Set ℓ₁) (B : Set ℓ₂) where
   isEquiv : (A → B) → Set _
@@ -366,8 +367,6 @@ module _ {ℓ₁} {ℓ₂} (A : Set ℓ₁) (B : Set ℓ₂) where
 infix 4 _≃_
 _≃_ : ∀ {ℓ₁} {ℓ₂} → Set ℓ₁ → Set ℓ₂ → Set _
 A ≃ B = Σ (A → B) (isEquiv _ _)
-
-open import Function using (id)
 
 ide : ∀ {ℓ} {A : Set ℓ} → A ≃ A
 ide = id , λ y → singlIsContr {x = y}
@@ -403,8 +402,10 @@ Glue : ∀ {ℓ ℓ'} (A : Set ℓ) → (φ : I) → (T : Partial (Set ℓ') φ)
   (f : (PartialP φ (λ o → T o ≃ A))) → Set ℓ'
 Glue A φ T f = primGlue A φ T (λ o → proj₁ (f o)) (λ o → proj₂ (f o))
 
-{-module Unsafe'' (dummy : Set1) = GluePrims
-module Unsafe''' = Unsafe'' Set -- using () renaming (prim^glue to unsafeGlue) public
+-- TODO: Need unsafeComp and unsafePOr
+{-
+module Unsafe'' (dummy : Set1) = GluePrims
+module Unsafe''' = Unsafe'' Set
 
 unsafeGlue = Unsafe'''.prim^glue
 
@@ -486,8 +487,7 @@ compGlue : {ℓ ℓ' : I → Level} (A : ∀ i → Set (ℓ i)) (φ : I → I)
 compGlue A φ T f pf ψ b b0 =
   CompGlue.Local.b1 A φ T (λ i p → (f i p) , (pf i p)) ψ b b0
 
-{-# BUILTIN COMPGLUE compGlue #-}
--}
+{-# BUILTIN COMPGLUE compGlue #-}-}
 
 module _ {ℓ} {A B : Set ℓ} where
   ua : A ≃ B → A ≡ B
