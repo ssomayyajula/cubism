@@ -75,21 +75,22 @@ Together, these properties make $(I, \max, \min, 0, 1)$ a bounded distributive l
 
 module _ where
 
-open import Agda.Primitive.Cubical public renaming
-  (primINeg   to  ~_;
-   primIMax   to _∨_;
-   primIMin   to _∧_;
-   primComp   to comp;
-   isOneEmpty to [])
-
-{-module Unsafe' (dummy : Set₁) where
-  open import Agda.Primitive.Cubical public
-unsafeComp = Unsafe'.primComp Set
-unsafePOr = Unsafe'.primPOr Set-}
-
 open import Agda.Primitive using (Level)
-
 open import Function using (id)
+
+module Primitives where
+  open import Agda.Primitive.Cubical public renaming
+    (primINeg   to  ~_;
+     primIMax   to _∨_;
+     primIMin   to _∧_;
+     primComp   to comp;
+     isOneEmpty to [])
+
+module Unsafe' (dummy : Set₁) = Primitives
+unsafeComp = Unsafe'.comp Set
+unsafePOr = Unsafe'.primPOr Set
+
+open Primitives public
 
 \end{code}}
 
@@ -208,19 +209,19 @@ We would like to compute the composition of these paths by ``completing'' the sq
 Equality is substitutive. Theorems: it is an equivalence relation.
 
 \begin{code}
-{-fill : {ℓ : I → Level} → (A : (i : I) → Set (ℓ i)) → (φ : I) →
-  ((i : I) → Partial (A i) φ) → A i0 → (i : I) → A i
-fill A φ u a0 i = comp (λ j → A (i ∧ j)) (φ ∨ ~ i)
-  (λ j → primPOr φ (~ i) (u (i ∧ j)) λ { (i = i0) → a0 }) a0-}
-
 module _ {ℓ} {A B : Set ℓ} where
   coe : Path A B → A → B
   coe p x = comp (λ i → p i) _ (λ _ → []) x
 
-module _ {ℓ} {A : Set ℓ} where
-  coe-β : (x : A) → Path (coe idp x) x
-  coe-β x = {!!}
+fill : {ℓ : I → Level} → (A : (i : I) → Set (ℓ i)) → (φ : I) →
+  ((i : I) → Partial (A i) φ) → A i0 → (i : I) → A i
+fill A φ u a0 i = unsafeComp (λ j → A (i ∧ j)) (φ ∨ ~ i)
+  (λ j → unsafePOr φ (~ i) (u (i ∧ j)) λ { (i = i0) → a0 }) a0
 
+module _ {ℓ} {A : Set ℓ} where
+  coe-β : (x : A) → Path x (coe idp x)
+  coe-β x = {!!}
+  
   {-open import Agda.Primitive using (Level)
   coed : {ℓ : I → Agda.Primitive.Level} → (A : (i : I) → Set (ℓ i)) → A i0 → A i1
   coed A x = comp A i0 (λ _ → []) x-}
@@ -233,6 +234,10 @@ module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} where
 
   transport⁻¹ : (P : A → Set ℓ₂) {x y : A} → Path x y → P y → P x
   transport⁻¹ P = transport P ∘ _⁻¹
+
+module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} where
+  transport-β : (P : A → Set ℓ₂) {x : A} (ux : P x) → Path ux (transport P idp ux)
+  transport-β P {x} ux = {!!}
 \end{code}
 
 We can model equality in this type theory via topological paths---continuous functions from the unit interval into a space.
@@ -252,11 +257,11 @@ module _ {ℓ} {A : Set ℓ} {x : A} where
 
 module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {x : A} where
   J : (P : ∀ y → Path x y → Set ℓ₂) (r : P x idp) {y : A} (p : Path x y) → P y p
-  J P r {y} p = coe (λ i → uncurry P (proj₂ singlIsContr (y , p) i)) r
+  J P r {y} p = transport (uncurry P) (proj₂ singlIsContr (y , p)) r
 
 module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {x : A} where
   J-β : (P : ∀ y → Path x y → Set ℓ₂) (r : P x idp) → Path (J P r idp) r
-  J-β _ = coe-β
+  J-β P = {!!} --transport-β (uncurry P) --coe-β
 \end{code}
 
 \begin{theorem}[Composition of paths]
@@ -368,6 +373,16 @@ infix 4 _≃_
 _≃_ : ∀ {ℓ₁} {ℓ₂} → Set ℓ₁ → Set ℓ₂ → Set _
 A ≃ B = Σ (A → B) (isEquiv _ _)
 
+module _ {ℓ} {A : Set ℓ} where
+  contr : isContr A → (φ : I) → (u : Partial A φ) → A
+  contr (c , p) φ u = comp (λ _ → A) φ (λ i o → p (u o) i) c
+
+module _ {ℓ₁} {ℓ₂} (A : Set ℓ₁) (B : Set ℓ₂) where
+  module _ (f : A ≃ B) (φ : I) (t : Partial A φ) (a : B {- [ φ ↦ f t ] -})
+           (p : PartialP φ (λ o → a ≡ proj₁ f (t o))) where
+    equiv : fiber (proj₁ f) a -- [ φ ↦ (t , λ j → a) ]
+    equiv = contr ((proj₂ f) a) φ (λ o → t o , (λ i → p o i))
+
 ide : ∀ {ℓ} {A : Set ℓ} → A ≃ A
 ide = id , λ y → singlIsContr {x = y}
 
@@ -381,6 +396,29 @@ pathToEquivProof E = proj₂ (pathToEquiv P)
         P i = E i
 
 {-# BUILTIN PATHTOEQUIV pathToEquivProof #-}-}
+
+module _ {ℓ ℓ' : I → Level} {T : ∀ i → Set (ℓ i)} {A : ∀ i → Set (ℓ' i)}
+         (f : ∀ i → T i → A i) (φ : I) (t : ∀ i → Partial (T i) φ)
+         (t0 : T i0 {- [ φ ↦ t i0 ] -}) where
+  private
+    c1 c2 : A i1
+    c1 = unsafeComp A φ (λ i → (λ { (φ = i1) → f i (t i itIsOne)})) (f i0 t0)
+    c2 = f i1 (unsafeComp T φ t t0)
+
+    a0 = f i0 t0
+
+    a : ∀ i → Partial (A i) φ
+    a i = (λ { (φ = i1) → f i ((t i) itIsOne)})
+
+    u : ∀ i → A i
+    u = fill A φ a a0
+
+    v : ∀ i → T i
+    v = fill T φ t t0
+
+  pres : c1 ≡ c2
+  pres j = unsafeComp A (φ ∨ (j ∨ ~ j)) (λ i → primPOr φ (j ∨ ~ j)
+    (a i) \ { (j = i1) → f i (v i); (j = i0) → u i}) a0
 
 module GluePrims where
   primitive
@@ -403,7 +441,7 @@ Glue : ∀ {ℓ ℓ'} (A : Set ℓ) → (φ : I) → (T : Partial (Set ℓ') φ)
 Glue A φ T f = primGlue A φ T (λ o → proj₁ (f o)) (λ o → proj₂ (f o))
 
 -- TODO: Need unsafeComp and unsafePOr
-{-
+
 module Unsafe'' (dummy : Set1) = GluePrims
 module Unsafe''' = Unsafe'' Set
 
@@ -421,10 +459,10 @@ module FaceForall (φ : I → I) where
 module _ {ℓ ℓ'} {A : Set ℓ} {φ : I} {T : Partial (Set ℓ') φ}
            {f : (PartialP φ λ o → T o ≃ A)} where
   fwdGlueIso : PartialP φ (λ o → Glue A φ T f → T o)
-  fwdGlueIso (φ = i1) = id _
+  fwdGlueIso (φ = i1) = id
 
   backGlueIso : PartialP φ (λ o → T o → Glue A φ T f)
-  backGlueIso (φ = i1) = id _
+  backGlueIso (φ = i1) = id
 
   lemGlueIso : (b : PartialP φ (λ _ → Glue A φ T f)) → PartialP φ λ o →
                  (unglue {φ = φ} (b o)) ≡ (proj₁ (f o) (fwdGlueIso o (b o)))
@@ -454,7 +492,7 @@ module CompGlue {ℓ ℓ' : I → Level} (A : ∀ i → Set (ℓ i))
                 (fwdGlueIso {φ = φ i0} (∀e o i0) b0)
 
       ω : PartialP δ _
-      ω o = pres (λ i → fst (f i (∀e o i))) ψ
+      ω o = pres (λ i → proj₁ (f i (∀e o i))) ψ
               (λ i x → fwdGlueIso {φ = φ i} (∀e o i) (b i x))
               (fwdGlueIso {φ = φ i0} (∀e o i0) b0)
 
@@ -464,11 +502,11 @@ module CompGlue {ℓ ℓ' : I → Level} (A : ∀ i → Set (ℓ i))
       g : PartialP (φ i1) _
       g o = (equiv (T i1 _) (A i1) (f i1 o) (δ ∨ ψ)
         (unsafePOr δ ψ t1' (λ o' → fwdGlueIso {φ = φ i1} o (b i1 o'))) a1''
-        ((unsafePOr δ ψ (λ {(δ = i1) → refl})
+        ((unsafePOr δ ψ (λ {(δ = i1) → idp})
           ((λ{ (ψ = i1) → lemGlueIso {φ = φ i1} (λ _ → b i1 itIsOne) o })))))
       t1 α : PartialP (φ i1) _
-      t1 o = fst (g o)
-      α o = snd (g o)
+      t1 o = proj₁ (g o)
+      α o = proj₂ (g o)
 
       a1 = unsafeComp (λ j → A i1) (φ i1 ∨ ψ)
              (λ j → unsafePOr (φ i1) ψ (λ o → α o j) (a i1)) a1''
@@ -487,12 +525,14 @@ compGlue : {ℓ ℓ' : I → Level} (A : ∀ i → Set (ℓ i)) (φ : I → I)
 compGlue A φ T f pf ψ b b0 =
   CompGlue.Local.b1 A φ T (λ i p → (f i p) , (pf i p)) ψ b b0
 
-{-# BUILTIN COMPGLUE compGlue #-}-}
+{-# BUILTIN COMPGLUE compGlue #-}
 
 module _ {ℓ} {A B : Set ℓ} where
   ua : A ≃ B → A ≡ B
   ua e i = Glue B _ (λ { (i = i0) → A; (i = i1) → B})
     λ { (i = i0) → e; (i = i1) → ide }
+
+open import Data.Bool
 
 -- Axiom: pathToEquiv is an equivalence with ua as its inverse
 -- TODO: ua-β
