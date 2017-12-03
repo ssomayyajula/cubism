@@ -12,6 +12,8 @@
 \usepackage{amssymb}
 \usepackage{amsthm}
 
+\usepackage{verbatim}
+
 % Links
 \usepackage{hyperref}
 
@@ -33,6 +35,10 @@
   \begingroup\def\\{ }#1\endgroup}
 
 \newtheorem{theorem}{Theorem}[section]
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
 \newcommand{\Path}{\D{Path}}
 \newcommand{\comp}{\F{comp}}
 
@@ -75,8 +81,9 @@ Together, these properties make $(I, \max, \min, 0, 1)$ a bounded distributive l
 
 module _ where
 
-open import Agda.Primitive using (Level)
-open import Function using (id)
+open import Agda.Primitive using (Level; lsuc; _⊔_)
+open import Function using (id; _$_; _∘_; flip)
+open import Data.Product hiding (map)
 
 module Primitives where
   open import Agda.Primitive.Cubical public renaming
@@ -84,7 +91,7 @@ module Primitives where
      primIMax   to _∨_;
      primIMin   to _∧_;
      primComp   to comp;
-     isOneEmpty to [])
+     isOneEmpty to empty)
 
 module Unsafe' (dummy : Set₁) = Primitives
 unsafeComp = Unsafe'.comp Set
@@ -105,14 +112,10 @@ Note that CuTT defines \D{I} as a set, as opposed to a type, for technical reaso
 postulate
   PathP : ∀ {ℓ} (P : I → Set ℓ) → P i0 → P i1 → Set ℓ
 
-
-  
-
 {-# BUILTIN PATHP PathP #-}
 
 Path : ∀ {ℓ} {A : Set ℓ} → A → A → Set ℓ
 Path {A = A} = PathP (λ _ → A)
-
 \end{code}}
 
 Perhaps that after dealing with this level of abstraction (pun intended), we deserve a few examples where we reason about the basic properties of paths.
@@ -172,97 +175,188 @@ Given a path \Arg{p} from \Arg{x} to \Arg{y}, $\Arg{f}~(\Arg{p}~\Con{i0})=\Arg{f
 \end{proof}
 }
 
-Paths look suspiciously like the identity type---in particular, these examples correspond to reflexivity and function substitutivity, respectively. Indeed, we will see how we may leverage paths to represent equalities; but first, we will see why CuTT is cubical. If $P_n$ is a type family parameterized by $n$ intervals, it induces the an $n$-dimensional cube; see figure TODO in TODO. The manipulation of paths and cubes will lead to primitive operations that allow us to do mathematics and programming.
-
-\subsection{Kan compositions}
-Let \tikz[baseline]{\drawpath{p~i}{x}{y}{1}} denote $\Arg{p}:\Path~\Arg{x}~\Arg{y}$ applied to an element \Arg{i} of \D{I}. Now, consider the diagram in figure \ref{fig:comppaths}.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[->]
-  \node at (0,0) (x1) {\Arg{x}};
-  \node at (0,3) (x2) {\Arg{x}};
-  \node at (3,0) (y)  {\Arg{y}};
-  \node at (3,3) (z)  {\Arg{z}};
-
-  \path
-    (x1) edge         node[left]  {x}         (x2)
-    (x2) edge[dashed] node[above] {?}         (z)
-    (x1) edge         node[below] {\Arg{p~i}} (y)
-    (y)  edge         node[right] {\Arg{q~j}} (z);
-\end{tikzpicture}
-\caption{Composition of paths}
-\label{fig:comppaths}
-\end{figure}
-
-We would like to compute the composition of these paths by ``completing'' the square. It turns out that completing cubes is ubiquitous in CuTT, but we currently do not have an operation that lets us do that. As a result, CuTT adds \comp, which fills in the missing face of a partially specified cube by taking the following arguments. 
-
-\begin{enumerate}
-\item A type family \Arg{P} parameterized by an interval
-\item An element of the interval (this is due to a limitation in Agda and is irrelevant in proper implementations of CuTT)
-\item A partial specification of a cube that introduces a fresh element \Arg{j} of \D{I} to describe its faces (of type \Arg{P~j})
-\item The bottom face of said cube (of type \Arg{P}~\Con{i0})
-\end{enumerate}
+Paths look suspiciously like the identity type---in particular, these examples correspond to reflexivity, symmetry, and function substitutivity, respectively. Indeed, we will see how we may leverage paths to represent equalities; but first, we will see why CuTT is cubical. If $P_n$ is a type family parameterized by $n$ intervals, it induces the an $n$-dimensional cube; see figure TODO in TODO. The manipulation of paths will allow us to do mathematics and programming.
 
 \subsection{Modeling Equality}
 
-Equality is substitutive. Theorems: it is an equivalence relation.
+We claim that we can model equality \'a la Leibniz using paths, so let's introduce a convenient alias.
 
+\begin{code}
+_≡_ : ∀ {ℓ} {A : Set ℓ} → A → A → Set ℓ
+_≡_ = Path
+\end{code}
+
+First, we will see how paths help us model extensional equality.
+
+\begin{definition}[Homotopy]
+The space of \emph{homotopies} between two functions is defined as follows.
+\AgdaHide{
+\begin{code}
+module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {P : A → Set ℓ₂} where
+\end{code}}
+\begin{code}
+  _∼_ : (f g : (x : A) → P x) → Set _
+  f ∼ g = ∀ x → f x ≡ g x
+\end{code}
+Although it is topologically-inspired, it is useful to think of the inhabitants of this type as proofs that two such functions are extensionally equal.
+\end{definition}
+
+As a result, we can prove the obvious: equal functions are \emph{homotopic}.
+
+\AgdaHide{
+\begin{code}
+  module _ {f g : (x : A) → P x} where
+\end{code}}
+
+\begin{theorem}
+\begin{code}
+    app≡ : f ≡ g → f ∼ g
+\end{code}
+\end{theorem}
+Given $p:f\equiv g$, we can produce a path $f~x≡g~x$ by the term $\lambda~i\to p~i~x$. One can validate this result by doing the same case analysis on $i$ as in the previous proofs.
+\begin{proof}
+\begin{code}
+    app≡ p x i = p i x
+\end{code}
+\end{proof}
+
+And, as desired, we can prove function extensionality.
+
+\begin{theorem}[Function extensionality]
+\begin{code}
+    λ≡ : f ∼ g → f ≡ g
+\end{code}
+\end{theorem}
+\begin{proof}
+This proof is subtle---we need to construct a path abstraction  that returns $f$ on \Con{i0} and $g$ on \Con{i1}. Given the homotopy $h$, $h x$ will identify 
+\begin{code}
+    λ≡ h i x = h x i
+\end{code}
+\end{proof}
+
+Furthermore, . It follows that the space of homotopies is equivalent to the space of paths on functions.
+
+Now, back to our regularly scheduled programming. Recall what is necessary for an equality to be Leibnizian; it must satisfy:
+
+\begin{enumerate}
+\item Reflexivity
+\item Function substitutivity
+\item Indiscernibility of identicals
+\end{enumerate}
+
+We have already shown (1) and (2), so it remains to show (3). First, we must define \emph{type coercion}: given that $\Arg{A}\equiv\Arg{B}$, we can convert $\Arg{x}:\Arg{A}$ to an element of type \Arg{B}. It is not immediately clear that such an operation exists given the current machinery we have for paths. However, CuTT comes with a path composition primitive \F{comp} that ``completes'' a partially specified cube.
+
+\begin{theorem}[Type coercion]
+\AgdaHide{
 \begin{code}
 module _ {ℓ} {A B : Set ℓ} where
-  coe : Path A B → A → B
-  coe p x = comp (λ i → p i) _ (λ _ → []) x
-
-fill : {ℓ : I → Level} → (A : (i : I) → Set (ℓ i)) → (φ : I) →
-  ((i : I) → Partial (A i) φ) → A i0 → (i : I) → A i
-fill A φ u a0 i = unsafeComp (λ j → A (i ∧ j)) (φ ∨ ~ i)
-  (λ j → unsafePOr φ (~ i) (u (i ∧ j)) λ { (i = i0) → a0 }) a0
-
-module _ {ℓ} {A : Set ℓ} where
-  coe-β : (x : A) → Path x (coe idp x)
-  coe-β x = {!!}
-  
-  {-open import Agda.Primitive using (Level)
-  coed : {ℓ : I → Agda.Primitive.Level} → (A : (i : I) → Set (ℓ i)) → A i0 → A i1
-  coed A x = comp A i0 (λ _ → []) x-}
-
-open import Function using (_∘_)
-
-module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} where
-  transport : (P : A → Set ℓ₂) {x y : A} → Path x y → P x → P y
-  transport P = coe ∘ ap P
-
-  transport⁻¹ : (P : A → Set ℓ₂) {x y : A} → Path x y → P y → P x
-  transport⁻¹ P = transport P ∘ _⁻¹
-
-module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} where
-  transport-β : (P : A → Set ℓ₂) {x : A} (ux : P x) → Path ux (transport P idp ux)
-  transport-β P {x} ux = {!!}
+\end{code}}
+\begin{code}
+  coe : A ≡ B → A → B
 \end{code}
+\end{theorem}
+\begin{proof}
+We realize a 0-dimensional cube (that is, a single point in \Arg{B}) by partially specifying 
+\begin{code}
+  coe p x = comp (λ i → p i) _ (λ _ → empty) x
+\end{code}
+\AgdaHide{
+\begin{code}
+module _ {ℓ} {A : Set ℓ} where
+\end{code}}
+\begin{code}
+  coe-β : (x : A) → coe idp x ≡ x
+  coe-β x i = comp (λ _ → A) _ (λ { j (i = i1) → x }) x
+\end{code}
+\end{proof}
 
-We can model equality in this type theory via topological paths---continuous functions from the unit interval into a space.
+The indiscernibility of identicals follows immediately by coercion and action of paths.
+
+\begin{theorem}[Indiscernibility of identicals]
+\AgdaHide{
+\begin{code}
+module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} where
+\end{code}}
+\begin{code}
+  transport : (P : A → Set ℓ₂) {x y : A} → x ≡ y → P x → P y
+  transport⁻¹ : (P : A → Set ℓ₂) {x y : A} → x ≡ y → P y → P x
+\end{code}
+\end{theorem}
+\begin{proof}
 
 \begin{code}
-open import Data.Product
+  transport   P = coe ∘ ap P
+  transport⁻¹ P = transport P ∘ _⁻¹
+\end{code}
+\end{proof}
 
+Now that we've proven to ourselves that paths are indeed a faithful representation of equality, we will develop a powerful inductive principle to reason about them---Paulin-Mohring's \F{J}, or \emph{path induction}. But first, some definitions.
+
+\begin{definition}[Contractible space]
+We say a space is \emph{contractible} if and only if it has a point to which there is a path to every other point in it.
+\begin{code}
 isContr : ∀ {ℓ} → Set ℓ → Set ℓ
 isContr A = ∃ λ x → ∀ (y : A) → Path x y
+\end{code}
+In this definition, we say that we can \emph{contract} \Arg{A} to \Arg{x}.
+\end{definition}
 
+\begin{definition}[Singleton space]
+The \emph{singleton space} is the space of paths fixed at a base point.
+\begin{code}
 singl : ∀ {ℓ} {A : Set ℓ} → A → Set ℓ
 singl a = ∃ λ x → Path a x
-
-module _ {ℓ} {A : Set ℓ} {x : A} where
-  singlIsContr : isContr (singl x)
-  singlIsContr = (x , idp) , λ { (_ , p) i → p i , λ j → p (i ∧ j) }
-
-module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {x : A} where
-  J : (P : ∀ y → Path x y → Set ℓ₂) (r : P x idp) {y : A} (p : Path x y) → P y p
-  J P r {y} p = transport (uncurry P) (proj₂ singlIsContr (y , p)) r
-
-module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {x : A} where
-  J-β : (P : ∀ y → Path x y → Set ℓ₂) (r : P x idp) → Path (J P r idp) r
-  J-β P = {!!} --transport-β (uncurry P) --coe-β
 \end{code}
+\end{definition}
+
+We can immediately prove that the singleton space is contractible.
+
+\begin{theorem}
+\AgdaHide{
+\begin{code}
+-- <j> p (i ∧ j) : Path x (p i) b/c @ i0 = p i0 = x and @ i1 = p i
+module _ {ℓ} {A : Set ℓ} {x : A} where
+\end{code}}
+\begin{code}
+  singlIsContr : isContr (singl x)
+\end{code}
+\end{theorem}
+\begin{proof}
+We claim that we can contract this type to $(\Arg{x}, \F{idp})$ i.e. that for any $(y,p)$, $(x,idp)\equiv(y,p)$. Thus, we construct a path abstraction valued $(x,p)$ at \Con{i0} and $(y,p)$ at \Con{i1}. Clearly, $p$ takes care of the first component, but how do we 
+\begin{code}
+  singlIsContr = (x , idp) , λ { (_ , p) i → p i , λ j → p (i ∧ j) }
+\end{code}
+This is a remarkable result---under the right conditions, any path can be contracted to the constant path. Topologically, this makes sense---the singleton space consists of all paths fixed at one endpoint $a$, but free at another. So, we can ``unhook'' the path at the free endpoint and pull it back to the original base point $a$. As a result, this contraction is only possible if and only if at least one endpoint is freely quantified.
+\end{proof}
+
+Path induction is then an immediate consequence of the contractibility of the singleton space.
+
+\begin{theorem}[Path induction]
+We can rephrase this contractibility result in terms of an induction principle. Paulin-Mohring's $J$, or \emph{path induction} in homotopy type theory, is the principle that to prove any proposition over a path with at least one free endpoint, it suffices to prove the case for the constant path.
+\AgdaHide{
+\begin{code}
+module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {x : A} where
+\end{code}}
+\begin{code}
+  J : (P : ∀ y → Path x y → Set ℓ₂) (r : P x idp) {y : A} (p : Path x y) → P y p
+\end{code}
+\end{theorem}
+\begin{proof}
+\begin{code}
+  J P r {y} p = transport (uncurry P) (proj₂ singlIsContr (y , p)) r
+\end{code}
+We can go even further and prove a \emph{propositional computation rule} for \F{J}; as expected, when applied to \F{idp}, it returns the provided case for \F{idp}. Unfortunately, this rule only holds up to paths, but the original CuTT paper defines Martin-L\"of's \emph{identity type} in terms of paths in a way where this rule holds definitionally.
+\AgdaHide{
+\begin{code}
+module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {x : A} {P : ∀ y → Path x y → Set ℓ₂} {r : P x idp} where
+\end{code}}
+\begin{code}
+  J-β : J P r idp ≡ r
+  J-β = coe-β r
+\end{code}
+\end{proof}
+
+Path induction is quite powerful because we can reduce many proofs involving paths to the constant path case. In fact, we may easily define path composition, or transitivity of equality, using this principle.
 
 \begin{theorem}[Composition of paths]
 \AgdaHide{
@@ -280,6 +374,11 @@ module _ {ℓ} {A : Set ℓ} {x y z : A} where
 \end{code}
 \end{proof}
 
+\begin{theorem}
+Paths form an equivalence relation.
+\end{theorem}
+
+\AgdaHide{
 \begin{code}
 open import Relation.Binary using (IsEquivalence; Setoid)
 
@@ -298,28 +397,14 @@ PathSetoid A = record
 
 module _ {ℓ} {A : Set ℓ} where
   open import Relation.Binary.EqReasoning (PathSetoid A) public
+\end{code}}
 
-_≡_ = Path
-\end{code}
 
-\begin{code}
-
-module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {P : A → Set ℓ₂} where
-  _∼_ : (f g : (x : A) → P x) → Set _
-  f ∼ g = (x : A) → f x ≡ g x
-
-  module _ {f g : (x : A) → P x} where
-    app≡ : f ≡ g → f ∼ g
-    app≡ p x i = p i x
-
-    λ≡ : f ∼ g → f ≡ g
-    λ≡ h i x = h x i
-\end{code}
 
 \begin{code}
 module _ {ℓ} {A : Set ℓ} {x y : A} where
   ∙-unitl : (p : Path x y) → idp ∙ p ≡ p
-  ∙-unitl = app≡ (J-β (λ y _ → Path x y → Path x y) _)
+  ∙-unitl = app≡ (J-β {P = λ y _ → Path x y → Path x y})
 
 module _ {ℓ} {A : Set ℓ} {x y : A} where
   ∙-unitr : (p : Path x y) → p ∙ idp ≡ p
@@ -341,7 +426,8 @@ open import Algebra using (Group)
 Ω[_,_] : ∀ {ℓ} (A : Set ℓ) → A → Set ℓ 
 Ω[ _ , a ] = Path a a
 
-{-Ω-Group : ∀ {ℓ} (A : Set ℓ) → A → Group ℓ ℓ
+{-
+Ω-Group : ∀ {ℓ} (A : Set ℓ) → A → Group ℓ ℓ
 Ω-Group A x = record
   { Carrier = Ω[ A , x ]
   ; _≈_ = _≡_
@@ -358,20 +444,22 @@ open import Algebra using (Group)
     ; inverse = ∙-invl , ∙-invr
     ; ⁻¹-cong = {!!}
     }
-  }-}
+  }
+-}
 
+-- Preimage/inverse image of {y}
 fiber : ∀ {ℓ₁ ℓ₂} {A : Set ℓ₁} {B : Set ℓ₂} (f : A → B) (y : B) → Set _
 fiber {A = A} f y = Σ[ x ∈ A ] y ≡ f x
 
 module _ {ℓ₁} {ℓ₂} (A : Set ℓ₁) (B : Set ℓ₂) where
   isEquiv : (A → B) → Set _
-  isEquiv f = (y : B) → isContr (fiber f y)
+  isEquiv f = ∀ y → isContr (fiber f y)
 
 {-# BUILTIN ISEQUIV isEquiv #-}
 
 infix 4 _≃_
 _≃_ : ∀ {ℓ₁} {ℓ₂} → Set ℓ₁ → Set ℓ₂ → Set _
-A ≃ B = Σ (A → B) (isEquiv _ _)
+A ≃ B = Σ (A → B) (isEquiv A B)
 
 module _ {ℓ} {A : Set ℓ} where
   contr : isContr A → (φ : I) → (u : Partial A φ) → A
@@ -381,21 +469,77 @@ module _ {ℓ₁} {ℓ₂} (A : Set ℓ₁) (B : Set ℓ₂) where
   module _ (f : A ≃ B) (φ : I) (t : Partial A φ) (a : B {- [ φ ↦ f t ] -})
            (p : PartialP φ (λ o → a ≡ proj₁ f (t o))) where
     equiv : fiber (proj₁ f) a -- [ φ ↦ (t , λ j → a) ]
-    equiv = contr ((proj₂ f) a) φ (λ o → t o , (λ i → p o i))
+    equiv = contr (proj₂ f a) φ (λ o → t o , (λ i → p o i))
 
 ide : ∀ {ℓ} {A : Set ℓ} → A ≃ A
 ide = id , λ y → singlIsContr {x = y}
 
+record qinv {ℓ₁} {ℓ₂} {A : Set ℓ₁} {B : Set ℓ₂} (f : A → B) : Set (ℓ₁ ⊔ ℓ₂) where
+  constructor mkqinv
+  field
+    g : B → A
+    ε : (g ∘ f) ∼ id
+    η : (f ∘ g) ∼ id
+
+_≂_ : ∀ {ℓ₁} {ℓ₂} (A : Set ℓ₁) (B : Set ℓ₂) → Set _
+A ≂ B = Σ (A → B) qinv
+\end{code}
+
+\AgdaHide{
+\begin{code}
+Square : ∀ {ℓ} {A : Set ℓ} {a0 a1 b0 b1 : A}
+          (u : a0 ≡ a1) (v : b0 ≡ b1) (r0 : a0 ≡ b0) (r1 : a1 ≡ b1) → Set ℓ
+Square u v r0 r1 = PathP (λ i → u i ≡ v i) r0 r1
+\end{code}}
+
+\begin{code}
+qinvToEquiv : ∀ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {B : Set ℓ₂} → A ≂ B → A ≃ B
+qinvToEquiv {A = A} {B} (f , mkqinv g ε η) = f , λ y → (g y , η y ⁻¹) ,
+  λ { (z , p) i → gy≡z p i , square p i } where
+
+  gy≡z : ∀ {y z} → y ≡ f z → g y ≡ z
+  gy≡z {z = z} p = ap g p ∙ ε z
+  
+  module _ {y z} (p : y ≡ f z) where
+    postulate
+      fill0 : Square (ap g (η y ⁻¹)) idp (idp {x = g y}) (ε (g y))
+    {-fill0 i j = comp (λ _ → A) _ (λ k →
+      λ { (i = i0) → g y
+        ; (i = i1) → ε (g y) (j ∧ k)
+        ; (j = i0) → g ((η y ⁻¹) i) }) (g ((η y ⁻¹) i))-}
+    
+      fill1 : Square (ap g p) (gy≡z p) idp (ε z)
+    {-fill1 i j = comp (λ _ → A) _ (λ k →
+      λ { (i = i1) → ε z (j ∧ k)
+        ; (i = i0) → g y
+        ; (j = i0) → g (p i) }) (g (p i))-}
+    
+    subsq : Square idp (ap (g ∘ f) (gy≡z p)) (ap g (η y ⁻¹)) (ap g p)
+    subsq i j = comp (λ _ → A) _ (λ k →
+      λ { (i = i0) → fill0 j (~ k)
+        ; (i = i1) → fill1 j (~ k)
+        ; (j = i0) → g y
+        ; (j = i1) → ε (gy≡z p i) (~ k) }) (gy≡z p (i ∧ j))
+
+    square : Square idp (ap f (gy≡z p)) (η y ⁻¹) p
+    square i j = comp (λ _ → B) _ (λ k →
+      λ { (i = i0) → η ((η y ⁻¹) j) k
+        ; (i = i1) → η (p j) k
+        ; (j = i0) → η y k
+        ; (j = i1) → η (f (gy≡z p i)) k }) (f (subsq i j))
+
 module _ {ℓ} {A B : Set ℓ} where
   pathToEquiv : A ≡ B → A ≃ B
   pathToEquiv = J (λ B _ → A ≃ B) ide
+\end{code}
 
-{-pathToEquivProof : ∀ {ℓ} (E : I → Set ℓ) → isEquiv (E i0) (E i1) (coed E)
-pathToEquivProof E = proj₂ (pathToEquiv P)
-  where P : E i0 ≡ E i1
-        P i = E i
-
-{-# BUILTIN PATHTOEQUIV pathToEquivProof #-}-}
+\AgdaHide{
+\begin{code}
+-- Saizan's implementation of Kan filling (check original paper for reference implementation)
+fill : {ℓ : I → Level} → (A : (i : I) → Set (ℓ i)) → (φ : I) →
+  ((i : I) → Partial (A i) φ) → A i0 → (i : I) → A i
+fill A φ u a0 i = unsafeComp (λ j → A (i ∧ j)) (φ ∨ ~ i)
+  (λ j → unsafePOr φ (~ i) (u (i ∧ j)) λ { (i = i0) → a0 }) a0
 
 module _ {ℓ ℓ' : I → Level} {T : ∀ i → Set (ℓ i)} {A : ∀ i → Set (ℓ' i)}
          (f : ∀ i → T i → A i) (φ : I) (t : ∀ i → Partial (T i) φ)
@@ -523,22 +667,33 @@ compGlue : {ℓ ℓ' : I → Level} (A : ∀ i → Set (ℓ i)) (φ : I → I)
                B = λ i → primGlue (A i) (φ i) (T i) (f i) (pf i)
            in  (ψ : I) (b : ∀ i → Partial (B i) ψ) (b0 : B i0) → B i1
 compGlue A φ T f pf ψ b b0 =
-  CompGlue.Local.b1 A φ T (λ i p → (f i p) , (pf i p)) ψ b b0
+  CompGlue.Local.b1 A φ T (λ i p → f i p , pf i p) ψ b b0
 
 {-# BUILTIN COMPGLUE compGlue #-}
+\end{code}}
 
+\begin{code}
 module _ {ℓ} {A B : Set ℓ} where
   ua : A ≃ B → A ≡ B
   ua e i = Glue B _ (λ { (i = i0) → A; (i = i1) → B})
     λ { (i = i0) → e; (i = i1) → ide }
 
-open import Data.Bool
+  ua-β : (e : A ≃ B) → coe (ua e) ≡ proj₁ e
+  ua-β e = λ≡ λ x → coe-β _ ∙ coe-β _ ∙ coe-β _
 
--- Axiom: pathToEquiv is an equivalence with ua as its inverse
--- TODO: ua-β
+open import Data.Bool using (Bool; true; false; not)
 
+notq : Bool ≂ Bool
+notq = not , mkqinv not
+  (λ { true → idp; false → idp })
+  (λ { true → idp; false → idp })
+
+-- Should normalize to false, which it does!
+_ : coe (ua (qinvToEquiv notq)) true ≡ false
+_ = idp
 \end{code}
 
+\AgdaHide{
 \begin{code}
 module RewriteRelation where
 
@@ -555,20 +710,30 @@ postulate
 
 module RecS¹ {ℓ} {Y : Set ℓ}
              (base* : Y)
-             (loop* : Path base* base*) where
+             (loop* : base* ≡ base*) where
   postulate
     f : S¹ → Y
     base-β : f base ↦ base*
+
   {-# REWRITE base-β #-}
-
+  
   postulate
-    loop-β : Path (ap f loop) loop*
+    loop-β : ∀ i → f (loop i) ↦ loop* i
+    
+    comp3 : ∀ {φ u u0} → (f (unsafeComp (λ i → S¹) φ u u0)) ↦
+                           (unsafeComp (λ i → Y)
+                                       φ
+                                       (λ i → λ { (φ = i1) → f (u i itIsOne) }) (f u0))
 
+  {-# REWRITE loop-β #-}
+  {-# REWRITE comp3 #-}
+   
 recS¹ = RecS¹.f
+\end{code}}
 
-
-open import Data.Integer
-open import Data.Nat
+\begin{code}
+open import Data.Integer hiding (_⊔_)
+open import Data.Nat hiding (_⊔_)
 
 -- Wind a path n times
 loop^ : ℤ → Ω[ S¹ , base ]
@@ -577,25 +742,168 @@ loop^ (+ suc n)    = loop ∙ loop^ (+ n)
 loop^ -[1+ 0 ]     = loop ⁻¹
 loop^ -[1+ suc n ] = loop ⁻¹ ∙ loop^ -[1+ n ]
 
+suc≡ : ℤ ≡ ℤ
+suc≡ = ua $ qinvToEquiv
+  (Data.Integer.suc ,
+   mkqinv Data.Integer.pred
+   (λ { (+ _) → idp; -[1+ 0 ] → idp; -[1+ suc _ ] → idp })
+   (λ { (+ 0) → idp; (+ suc _) → idp; -[1+ _ ] → idp }))
+
 -- Universal cover of circle
-{-Cover : S¹ → Set
-Cover = recS¹ ℤ {!!}
-
-windFrom : ℤ → Ω[S¹] → ℤ
-windFrom n p = transport Cover p n
-
-encode : ∀ {a} → Path base a → Cover a
-encode = J (λ a _ → Cover a) (+ 0)
+Cover : S¹ → Set
+Cover = recS¹ ℤ suc≡
 
 -- Winding number of path
-windingNum : Ω[S¹] → ℤ
-windingNum p = transport Cover p (+ 0)-}
-
---suc≃ : ℤ ≃ ℤ
-
+w : Ω[ S¹ , base ] → ℤ
+w p = transport Cover p (+ 0)
 
 \end{code}
 
 \subsection{Glueing and Univalence, Almost}
+
+\section{Programming}
+
+\subsection{Code Reuse}
+
+\begin{definition}[Monoid]
+A monoid is a type equipped with an identity element and associative operation.
+\begin{code}
+record Monoid {ℓ} (A : Set ℓ) : Set (lsuc ℓ) where
+  infixr 7 _·_
+  field
+    e : A
+    _·_ : A → A → A
+    ·-unitl : ∀ x → (e · x) ≡ x
+    ·-unitr : ∀ x → (x · e) ≡ x
+    ·-assoc : ∀ x y z → (x · y · z) ≡ ((x · y) · z)
+
+open Monoid {{...}} public
+\end{code}
+\end{definition}
+
+\begin{code}
+open import Data.List using (List; []; _∷_; _++_; length)
+
+foldl : ∀ {ℓ} {A : Set ℓ} {{_ : Monoid A}} → List A → A
+foldl []       = e
+foldl (h ∷ t) = h · foldl t
+\end{code}
+
+It immediately follows that a
+
+\begin{code}
+instance
+  ListMonoid : ∀ {ℓ} {A : Set ℓ} → Monoid (List A)
+  ListMonoid {A = A} = record
+    { e       = []
+    ; _·_     = _++_
+    ; ·-unitl = λ _ → idp
+    ; ·-unitr = unitr
+    ; ·-assoc = assoc } where
+
+    unitr : (l : List A) → (l ++ []) ≡ l
+    unitr []       = idp
+    unitr (h ∷ t) = ap (_∷_ h) (unitr t)
+
+    assoc : (x y z : List A) → (x ++ y ++ z) ≡ ((x ++ y) ++ z)
+    assoc []       _ _ = idp
+    assoc (h ∷ t) y z = ap (_∷_ h) (assoc t y z)
+\end{code}
+
+\begin{code}
+flatten : ∀ {ℓ} {A : Set ℓ} → List (List A) → List A
+flatten = foldl
+\end{code}
+
+\begin{code}
+open import Data.Vec using (Vec; []; _∷_; fromList; tabulate; map; _[_]=_; here; there)
+
+VecList : ∀ {ℓ} → Set ℓ → Set ℓ
+VecList A = Σ ℕ (Vec A)
+\end{code}
+
+\begin{code}
+ListIsVecList : ∀ {ℓ} {A : Set ℓ} → List A ≡ VecList A
+ListIsVecList {A = A} = ua (qinvToEquiv (toVecList , mkqinv toList ε η)) where
+  toVecList : List A → VecList A
+  toVecList l = length l , fromList l
+
+  toList : VecList A → List A
+  toList (_ , v) = Data.Vec.toList v
+
+  ε : (toList ∘ toVecList) ∼ id
+  ε []       = idp
+  ε (h ∷ t) = ap (_∷_ h) (ε t)
+
+  η : (toVecList ∘ toList) ∼ id
+  η (_ , [])         = idp
+  η (suc n , h ∷ t) = ap (λ{(n , t) → ℕ.suc n , h ∷ t}) (η (n , t))
+\end{code}
+
+\begin{code}
+instance
+  VecListMonoid : ∀ {ℓ} {A : Set ℓ} → Monoid (VecList A)
+  VecListMonoid = transport Monoid ListIsVecList ListMonoid
+\end{code}
+
+\begin{code}
+open import Data.Fin using (Fin; zero; suc)
+
+Array : ∀ {ℓ} → Set ℓ → ℕ → Set ℓ
+Array A n = Fin n → A
+\end{code}
+
+\AgdaHide{
+\begin{code}
+lookup : ∀ {ℓ n} {A : Set ℓ} → Vec A n → Array A n
+lookup = flip Data.Vec.lookup
+\end{code}}
+
+\begin{code}
+record Functor {ℓ₁} {ℓ₂} (F : Set ℓ₁ → Set ℓ₂) : Set (lsuc ℓ₁ ⊔ ℓ₂) where
+  infixl 4 _<$>_ _<$_ _$>_
+  
+  field
+    _<$>_ : ∀ {A B} → (A → B) → F A → F B
+    <$>-id : ∀ {A} (a : F A) → (id <$> a) ≡ a
+    <$>-∘ : ∀ {A B C} (f : B → C) (g : A → B) (x : F A) →
+      ((f ∘ g) <$> x) ≡ (f <$> (g <$> x))
+
+open Functor {{...}} public
+
+instance
+  ArrayFunctor : ∀ {ℓ n} → Functor {ℓ} (flip Array n)
+  ArrayFunctor = record
+    { _<$>_  = λ f a i → f (a i)
+    ; <$>-id = λ _     → idp
+    ; <$>-∘  = λ _ _ _ → idp }
+
+ArrayIsVec : ∀ {ℓ} (A : Set ℓ) (n : ℕ) → Array A n ≡ Vec A n
+ArrayIsVec A n = ua (qinvToEquiv (tabulate , mkqinv lookup ε η)) where
+  ε : (lookup ∘ tabulate) ∼ id
+  ε f = λ≡ h where
+    h : ∀ {n} {f : Array A n} → lookup (tabulate f) ∼ f
+    h zero    = idp
+    h (suc x) = h x
+
+  η : ∀ {n} → (tabulate ∘ lookup {n = n}) ∼ id
+  η []       = idp
+  η (h ∷ t) = ap (_∷_ h) (η t)
+
+instance
+  VecFunctor : ∀ {ℓ n} → Functor {ℓ} (flip Vec n)
+  VecFunctor {n = n} = transport Functor (λ≡ (flip ArrayIsVec n)) (ArrayFunctor {n = n})
+
+_ : ∀ {ℓ₁} {A : Set ℓ₁} {n} (v : Vec A n) → Functor._<$>_ VecFunctor id v ≡ v
+_ = Functor.<$>-id VecFunctor
+
+--TODO EXAMPLE VECLIST MONOID USE
+
+
+
+\end{code}
+
+\subsection{Abstract Types}
+
 
 \end{document}
