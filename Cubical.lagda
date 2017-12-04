@@ -60,7 +60,7 @@
 
 In recent years, the \emph{univalent foundations} program has aimed to develop a foundations of constructive mathematics with an enriched notion of equality. Technicality aside, recall that your average intensional type theory may only express intensional equalities between mathematical objects. Unlike extensional type theories, they may not express, for example, the extensional equality of functions. However, an intensional type theory with the \emph{univalence axiom} may identify equivalent types as equal for an appropriate definition of equivalence. Consequently, function extensionality becomes a theorem in this system, and many results that require a coarser notion of equality become provable. As Jon Sterling said in an episode of the Type Theory Podcast, ``in a sense, [this] is more extensional than extensional type theory,'' because the range of expressible equalities based on the behavior of objects is widened. In fact, univalence is expressly \emph{inconsistent} with extensional type theory, so it seems that an intensional and univalent type theory poses many benefits over existing systems.
 
-\emph{Homotopy type theory} (HoTT), the first such type theory developed by this program, extends Martin-L\"of type theory with the univalence axiom and other constructs to develop synthetic proofs of results in homotopy theory. Indeed, given our above exposition, HoTT seems to be the type theory to end all type theories. However, its critical weakness is that univalence lacks a computation rule. This is not an issue for those who intend to leverage HoTT for proofs, but what of programmers and constructivists? There are many situations where one may want to use univalence to seamlessly switch between different views of the same abstract type when writing a software application, or actually run one's proofs. While these programs and proofs would enjoy various type safety guarantees in HoTT, they would also just get \emph{stuck}. Enter \emph{cubical type theory} (CuTT), which is advertised as providing a ``constructive interpretation of the univalence axiom;'' that is, univalence gets a computation rule. We will give a brief introduction to CuTT and demonstrate its power and computational benefits in a variety of case studies motivated by concerns in mathematics and software engineering, all in Agda. Note that proofs pulled form external sources are cited either in the source code or in this paper; and, unless specified, definitions are taken from \cite{hottbook}.
+\emph{Homotopy type theory} (HoTT), the first such type theory developed by this program, extends Martin-L\"of type theory with the univalence axiom and other constructs to develop synthetic proofs of results in homotopy theory. Indeed, given our above exposition, HoTT seems to be the type theory to end all type theories. However, its critical weakness is that univalence lacks a computation rule. This is not an issue for those who intend to leverage HoTT for classical proofs, but what of programmers and constructivists? There are many situations where one may want to use univalence to seamlessly switch between different views of the same abstract type when writing a software application, or actually run one's proofs. While these programs and proofs would enjoy various type safety guarantees in HoTT, they would also just get \emph{stuck}. Enter \emph{cubical type theory} (CuTT), which is advertised as providing a ``constructive interpretation of the univalence axiom;'' that is, univalence gets a computation rule. We will give a brief introduction to CuTT and demonstrate its power and computational benefits in a variety of case studies motivated by concerns in mathematics and software engineering, all in Agda. Note that proofs pulled form external sources are cited either in the source code or in this paper; and, unless specified, definitions are taken from \cite{hottbook}.
 \section{Cubical Type Theory}
 
 CuTT starts with intuitionistic type theory and then introduces a set of primitive types that ultimately capture the topological notion of an $n$-dimensional cube. We will begin with the type of \emph{intervals}.
@@ -134,7 +134,7 @@ module _ {ℓ} {A : Set ℓ} {x : A} where
 \end{code}
 \end{theorem}
 \begin{proof}
-We want a path abstraction that is invariant on an element in \D{I}, so
+We want a path abstraction that is invariant on an element in \D{I}, so:
 \begin{code}
   idp _ = x
 \end{code}
@@ -163,11 +163,9 @@ If $\Arg{f}:\D{A}\to\D{B}$ and $\Arg{x},\Arg{y}:\D{A}$, we have
 \begin{code}
 module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} {B : Set ℓ₂} (f : A → B) {x y : A} where
 \end{code}}
-\begin{center}
 \begin{code}
   ap : Path x y → Path (f x) (f y)
 \end{code}
-\end{center}
 \end{theorem}
 \begin{proof}
 Given a path \Arg{p} from \Arg{x} to \Arg{y}, $\Arg{f}~(\Arg{p}~\Con{i0})=\Arg{f}~\Arg{x}$ and $\Arg{f}~(\Arg{p}~\Con{i1})=\Arg{f}~\Arg{y}$, so:
@@ -308,9 +306,8 @@ module _ {ℓ₁} {ℓ₂} {A : Set ℓ₁} where
   transport⁻¹ : (P : A → Set ℓ₂) {x y : A} → x ≡ y → P y → P x
 \end{code}
 \end{theorem}
-Consider $P$ to be a type-level function; then, the proof is trivial.
 \begin{proof}
-
+Consider $P$ to be a type-level function; then, the proof is trivial.
 \begin{code}
   transport   P = coe ∘ ap P
   transport⁻¹ P = transport P ∘ _⁻¹
@@ -349,7 +346,7 @@ module _ {ℓ} {A : Set ℓ} {x : A} where
 \end{code}
 \end{theorem}
 \begin{proof}
-We claim that we can contract this type to $(\Arg{x}, \F{idp})$ i.e. that for any $(y,p)$, $(x,idp)\equiv(y,p)$. Thus, we construct a path abstraction valued $(x,p)$ at \Con{i0} and $(y,p)$ at \Con{i1}. Clearly, $p$ takes care of the first component, but now we have to show $x\equiv p~i$ for the second component. We claim that $\lambda j\to p~(i\land j)$ works by case analysis on $j$---at \Con{i0}, we have $p~(i\land\Con{i0})=p~\Con{i0}=x$ and at \Con{i1}, we have $p~(i\land\Con{i1})=p~i$, as desired.
+We claim that we can contract this type to $(\Arg{x}, \F{idp})$ i.e. that for any $(y,p)$, $(x,idp)\equiv(y,p)$. Thus, we construct a path abstraction valued $(x,p)$ at \Con{i0} and $(y,p)$ at \Con{i1}. Clearly, $p$ takes care of the first component, but now we have to show $x\equiv p~i$ for the second component. We claim that $\lambda~j\to p~(i\land j)$ works by case analysis on $j$---at \Con{i0}, we have $p~(i\land\Con{i0})=p~\Con{i0}=x$ and at \Con{i1}, we have $p~(i\land\Con{i1})=p~i$, as desired.
 \begin{code}
   singlIsContr = (x , idp) , λ { (_ , p) i → p i , λ j → p (i ∧ j) }
 \end{code}
@@ -461,7 +458,7 @@ module _ {ℓ} {A : Set ℓ} where
 \end{code}}
 
 \subsection{Equivalences}
-To prove (part of) univalence, the principle that equivalent types are equal, we need a type-theoretic notion of equivalence. One such definition is that $A\simeq B$ if and only if we have a function $f:A\simeq B$ such that for all $y:B$, there is a unique $x:A$ such that $y\equiv f~x$, obeying a notion of bijectivity. However, univalence is the even stronger claim that the space of equivalences between two types is equivalent to the respective space of paths. As a result, given a proof $e$ that $f$ is an equivalence and if we have $\F{equivToPath}$ and $\F{pathToEquiv}$, then $\F{pathToEquiv}~(\F{equivToPath}~(f,e))\equiv(f,e)$. It follows that these procedures do not change $f$, and most importantly, $e$. This is impossible to guarantee as-is---even though we would still have proof that $f$ is an equivalence, the original proof $e$ might get lost in transit. Thus, we must require a proof-irrelevant notion of equivalence such that any modifications to $e$ are indistinguishable in this proof system. We introduce the following definition of equivalence to get around this issue \cite{cutt16}.
+To prove (part of) univalence, the principle that equivalent types are equal, we need a type-theoretic notion of equivalence. One such definition is that $A\simeq B$ if and only if we have a function $f:A\to B$ such that for all $y:B$, there is a unique $x:A$ such that $y\equiv f~x$, obeying a notion of bijectivity. However, univalence is the even stronger claim that the space of equivalences between two types is equivalent to the respective space of paths. As a result, given a proof $e$ that $f$ is an equivalence and if we have $\F{equivToPath}$ and $\F{pathToEquiv}$, then $\F{pathToEquiv}~(\F{equivToPath}~(f,e))\equiv(f,e)$. It follows that these procedures do not change $f$, and most importantly, $e$. This is impossible to guarantee as-is---even though we would still have proof that $f$ is an equivalence, the original proof $e$ might get lost in transit. Thus, we must require a proof-irrelevant notion of equivalence such that any modifications to $e$ are indistinguishable in this proof system. We introduce the following definition of equivalence to get around this issue \cite{cutt16}.
 
 \begin{definition}[Fiber space]
 We co-opt this definition directly from set theory---the fiber of $y$ under $f$ is the inverse image of $\{y\}$ under $f$.
@@ -796,9 +793,11 @@ The power of univalence is that coercing along a univalent path (that is, a path
 
 Let's try a quick application given this knowledge. The \F{not} function is an equivalence on \F{Bool}, so coercing along this path with \Con{true} should evaluate to \Con{false}, which it does!
 
+\AgdaHide{
 \begin{code}
 open import Data.Bool using (Bool; true; false; not)
-
+\end{code}}
+\begin{code}
 notq : Bool ≂ Bool
 notq = not , mkqinv not
   (λ { true → idp; false → idp })
@@ -879,10 +878,10 @@ With all these results, we would like to make a definitive statement about some 
 Thus, we get the following result.
 
 \begin{theorem}[Fundamental group]
-For all $A$ and $a:A$, $Ω[A,a]$ is a group.
+For all $A$ and $a:A$, $\F{Ω}[A,a]$ is a group.
 \end{theorem}
 
-For our intents and purposes, we may treat the loop space exactly as the fundamental group; see page 207 of \cite{hottbook} for more details. Let us take a moment to appreciate the simplicity of these results---indeed, HoTT and CuTT are useful tools for topologists and homotopy theorists due to the ease of formalizing complex results.
+For our intents and purposes, we may treat the loop space exactly as the fundamental group; see page 207 of \cite{hottbook} for more details.
 
 \AgdaHide{
 \begin{code}
@@ -919,7 +918,7 @@ Now that we have the vocabulary to discuss the fundamental group of various spac
 \label{fig:circle}
 \end{figure}
 
-We can characterize this concept in CuTT via a \emph{higher inductive type} \F{S¹}: not only is it inductively generated by $\F{base}$, but also by the path \F{loop}, which exists at a ``higher'' level than \F{base}. In general, any data type that defines its own paths is higher inductive. The circle has a \emph{topological recursion principle} \F{recS¹} that allows one to define a function $f:S^1\to A$ given the following data.
+We can characterize this concept in CuTT via a \emph{higher inductive type} \F{S¹}: not only is it inductively generated by $\F{base}$, but also by the path \F{loop}, which exists at a ``higher'' level than \F{base}. In general, any datatype that defines its own paths is higher inductive. The circle has a \emph{topological recursion principle} \F{recS¹} that allows one to define a function $f:\F{S^1}\to A$ given the following data.
 
 \begin{itemize}
 \item A \F{base} case $b:A$
@@ -973,13 +972,13 @@ open import Data.Nat hiding (_⊔_)
 We would now like to show the following result.
 
 \begin{theorem}
-The fundamental group of the circle is the integers i.e. $\Omega[S^1,\F{base}]\equiv\mathbb{Z}$.
+The fundamental group of the circle is the integers i.e. $\F{Ω}[\F{S^1},\F{base}]\equiv\mathbb{Z}$.
 \end{theorem}
 \begin{proof}
 A proof by Dan Licata is given at \cite{licata2012fundgrp}. As we did with univalence, we will not discuss the homotopies, but the computational essence of the proof. The intuition is that we can ascribe a normal form to any path in $\Omega[S^1,\F{base}]$: it is either \F{idp}, $\F{loop}^n=\underbrace{\F{loop}\cdot\ldots\cdot\F{loop}}_n$, or $\F{loop}^{-n}=\underbrace{\F{loop}^{-1}\cdot\ldots\cdot\F{loop}^{-1}}_n$. These look remarkably like the integers---as a result, a map $\Omega[S^1,\F{base}]\to\mathbb{Z}$ sends \F{idp} to $0$, $\F{loop}^n$ to $n$, and $\F{loop}^{-n}$ to $-n$. Then, the quasi-inverse simply takes an integer $n$ and iterates \F{loop} $n$ times in the direction of its sign, or \F{idp} if $n=0$.
 \end{proof}
 
-The easier direction is actually backwards---giving the map from $\mathbb{Z}$ to $\Omega[S^1,\F{base}]$.
+The easier direction is actually backwards---giving the map from $\mathbb{Z}$ to $\F{Ω}[\F{S^1},\F{base}]$.
 
 \begin{definition}[Winding path]
 \begin{code}
@@ -1033,6 +1032,8 @@ w p = transport Cover p (+ 0)
 \end{code}
 \end{definition}
 
+Let us take a moment to appreciate the simplicity of these results---indeed, HoTT and CuTT are useful tools for topologists and homotopy theorists due to the ease of formalizing complex results.
+
 \section{Programming}
 Dan Licata gave a talk titled \emph{Programming in Homotopy Type Theory} \cite{licata2012} in which he expounded upon the applications of univalence to software engineering. In particular, univalence does not allow a type theory to distinguish between equivalent types, so we can safely interchange use between them when convenient. This greatly increases code reuse---given code for one type, we can automatically generate code for all other equivalent types without resorting to metaprogramming or other ad hoc facilities. Furthermore, we can specify the behavior of one type and yield similar proofs of behavior for other equivalent types with the same mechanism. Consider the following examples.
 
@@ -1061,11 +1062,13 @@ open import Data.List using (List; []; _∷_; _++_; length)
 
 \F{foldl} performs this reduction operation on a finite stream from left-to-right.
 
+\begin{definition}[Fold/reduce]
 \begin{code}
 foldl : ∀ {ℓ} {A : Set ℓ} {{M : Monoid A}} → List A → A
 foldl []       = e
 foldl (h ∷ t) = h · foldl t
 \end{code}
+\end{definition}
 
 Clearly, lists---the free monoid over any type---is a monoid. In fact, we give its instance of \F{Monoid} with the empty list as the identity element and ``append'' as the associative operation.
 
@@ -1090,12 +1093,16 @@ instance
 
 This proof was quite tedious, but wait! It turns out that \emph{vectors}---lists indexed by length---behave \emph{exactly} like lists, so if the programmer would like to get the same functionality out of vectors, they would have to do essentially the same proof all over again...This is of course, a total waste of time. What if there was a way to generate the same \F{Monoid} instance for vectors given the one we have for lists? With univalence and \F{transport}, there is! First, consider the following datatype, which uses existential quantification to enclose over the type index for length.
 
+\begin{definition}[Vectors]
+\AgdaHide{
 \begin{code}
-open import Data.Vec using (Vec; []; _∷_; fromList; tabulate; map; _[_]=_; here; there)
-
+open import Data.Vec using (Vec; []; _∷_; fromList; tabulate)
+\end{code}}
+\begin{code}
 VecList : ∀ {ℓ} → Set ℓ → Set ℓ
 VecList A = Σ ℕ (Vec A)
 \end{code}
+\end{definition}
 
 Now, we can state the intuitively obvious univalent path: lists are equivalent to vectors. We do so by converting lists to vectors and vice versa element-by-element, which preserves length.
 
@@ -1117,7 +1124,7 @@ ListIsVecList {A = A} = ua (qinvToEquiv (toVecList , mkqinv toList ε η)) where
   η (suc n , h ∷ t) = ap (λ{(n , t) → ℕ.suc n , h ∷ t}) (η (n , t))
 \end{code}
 
-Now here is the cool part: we get an instance of \F{Monoid} for \F{VecList} for free, as desired. The indiscernibility of identicals is not only a statement about propositions, but for \emph{type-level functions}. Since \F{Monoid} is such a function, we can transport \F{ListMonoid} along the above path to yield the following instance.
+Now here is the cool part: we get an instance of \F{Monoid} for \F{VecList} for free, as desired. The indiscernibility of identicals is not only a statement about propositions, but about all \emph{type-level functions}. Since \F{Monoid} is such a function, we can transport \F{ListMonoid} along the above path to yield the following instance.
 
 \begin{code}
 instance
@@ -1128,14 +1135,18 @@ instance
 The utility and simplicity of this design pattern is astonishing---having a typesafe method of code generation will surely make sophisticated type theories more attractive to software engineers.
 
 \subsection{Abstract Types}
-Let us consider a similar application of univalence as in the last section. In particular, we often have different type-level views of the same concept. For example, in programming languages, typing contexts can simultaneously be thought of as functions from a domain of variables to a codomain of types, or a set of ordered pairs between variables and types. Informally, we do not make a distinction between them, but contemporary type theories do, making formal reasoning in a proof assistant cumbersome. While this does not bother a lot of practitioners, this is a fundamental disconnect between the way we reason about mathematical objects versus the language we use to represent them. Philosophically, a univalent type theory is much better suited to mathematics and software engineering, because once again, it cannot distinguish between equivalent concepts, as we do not. Thus, consider extending the above example: another way to view vectors is as \emph{arrays}---an array of length $n$ with elements in $A$ is a function from the set $\{0,\ldots,n-1\}$ to $A$, as follows.
+Let us consider a similar application of univalence as in the last section. In particular, we often have different type-level views of the same concept. For example, in programming languages, typing contexts can simultaneously be thought of as functions from a domain of variables to a codomain of types, or as a set of ordered pairs between variables and types. Informally, we do not make a distinction between them, but contemporary type theories do, making formal reasoning in a proof assistant cumbersome. While this does not bother a lot of practitioners, this is a fundamental disconnect between the way we reason about mathematical objects versus the language we use to represent them. Philosophically, a univalent type theory is much better suited to mathematics and software engineering, because once again, it cannot distinguish between equivalent concepts, as we do not. Thus, consider extending the above example: another way to view vectors is as \emph{arrays}---an array of length $n$ with elements in $A$ is a function from the set $\{0,\ldots,n-1\}$ to $A$, as follows.
 
+\begin{definition}[Arrays]
+\AgdaHide{
 \begin{code}
 open import Data.Fin using (Fin; zero; suc)
-
+\end{code}}
+\begin{code}
 Array : ∀ {ℓ} → Set ℓ → ℕ → Set ℓ
 Array A n = Fin n → A
 \end{code}
+\end{definition}
 
 \AgdaHide{
 \begin{code}
@@ -1143,8 +1154,9 @@ lookup : ∀ {ℓ n} {A : Set ℓ} → Vec A n → Array A n
 lookup = flip Data.Vec.lookup
 \end{code}}
 
-Lists, vectors, and arrays are all \emph{functors}, inspired by the analogous category-theoretic concept. Functors are types equipped with a map operation \'a la map/reduce that obeys the identity function and function composition.
+Lists, vectors, and arrays are all \emph{functors}, inspired by the analogous category-theoretic concept. Functors are types equipped with a map operation \'a la map/reduce that is coherent with the identity function and function composition.
 
+\begin{definition}[Functor]
 \begin{code}
 record Functor {ℓ₁} {ℓ₂} (F : Set ℓ₁ → Set ℓ₂) : Set (lsuc ℓ₁ ⊔ ℓ₂) where
   infixl 4 _<$>_
@@ -1155,6 +1167,7 @@ record Functor {ℓ₁} {ℓ₂} (F : Set ℓ₁ → Set ℓ₂) : Set (lsuc ℓ
     <$>-∘ : ∀ {A B C} (f : B → C) (g : A → B) (x : F A) →
       ((f ∘ g) <$> x) ≡ (f <$> (g <$> x))
 \end{code}
+\end{definition}
 
 \AgdaHide{
 \begin{code}
